@@ -51,10 +51,10 @@ def download_model(model_path):
     if not os.path.exists(model_path):
         print(f"Model not found locally. Downloading from Google Drive...")
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        
-        # Use gdown to download the file from Google Drive using file ID
-        url = f"https://drive.google.com/uc?id={drive_file_id}"
-        gdown.download(url, model_path, quiet=False, fuzzy=True)  # Add `fuzzy=True` to handle confirmation
+
+        # Change the URL to use the export format that `gdown` prefers
+        url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
+        gdown.download(url, model_path, quiet=False, fuzzy=True)
         
         # Optional: Wait for a short time to ensure download completes
         time.sleep(5)
@@ -64,6 +64,7 @@ def download_model(model_path):
             print("Model downloaded successfully!")
         else:
             raise Exception(f"Failed to download the model. Please check the file ID or URL.")
+
 
 # Function to load the model
 def load_model(model_path, num_classes=91, device='cpu'):
