@@ -1,2 +1,3 @@
 coco_env/
 saved_model/faster_rcnn_coco_trained.pth
+new_env/
