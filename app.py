@@ -42,35 +42,34 @@ COCO_INSTANCE_CATEGORY_NAMES = [
     'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-# Set the model path and Google Drive file ID
+# Load the trained model
 model_path = 'saved_model/faster_rcnn_coco_trained.pth'
-drive_file_id = '1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU'  # Google Drive file ID
+dropbox_link = 'https://www.dropbox.com/scl/fi/2s288wff0wg8q94bxgxow/faster_rcnn_coco_trained.pth?rlkey=r5qbth7v6gce6qs7e5f3xoaol&st=0qngbf8o&dl=1'  # Updated Dropbox direct download link
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 # Function to download the model if not present locally
-def download_model(model_path):
+def download_model(model_path, url):
     if not os.path.exists(model_path):
-        print(f"Model not found locally. Downloading from Google Drive...")
+        print(f"Model not found locally. Downloading from Dropbox...")
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-
-        # Change the URL to use the export format that `gdown` prefers
-        url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
-        gdown.download(url, model_path, quiet=False, fuzzy=True)
         
-        # Optional: Wait for a short time to ensure download completes
-        time.sleep(5)
-        
-        # Check if the file was successfully downloaded
-        if os.path.exists(model_path):
+        # Use requests to download the file from Dropbox
+        response = requests.get(url, stream=True)
+        if response.status_code == 200:
+            with open(model_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
             print("Model downloaded successfully!")
         else:
-            raise Exception(f"Failed to download the model. Please check the file ID or URL.")
+            raise Exception(f"Failed to download the model. HTTP Status: {response.status_code}")
 
+# Use the Dropbox link for downloading
+download_model(model_path, dropbox_link)
 
-# Function to load the model
 def load_model(model_path, num_classes=91, device='cpu'):
-    # Download the model from cloud if not available locally
-    download_model(model_path)
+    # Ensure model is downloaded before loading
+    download_model(model_path, dropbox_link)
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
