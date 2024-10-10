@@ -41,7 +41,7 @@ COCO_INSTANCE_CATEGORY_NAMES = [
     'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-# Load the trained model
+# Set the model path and Google Drive file ID
 model_path = 'saved_model/faster_rcnn_coco_trained.pth'
 drive_file_id = '1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU'  # Google Drive file ID
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -53,19 +53,19 @@ def download_model(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
         # Use gdown to download the file from Google Drive using file ID
-        gdown.download("https://drive.google.com/uc?id=1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU", model_path, quiet=False)
+        url = f"https://drive.google.com/uc?id={drive_file_id}"
+        gdown.download(url, model_path, quiet=False, fuzzy=True)  # Add `fuzzy=True` to handle confirmation
         
-        time.sleep(5)  # Optional: Wait for a short time to ensure download completes
+        # Optional: Wait for a short time to ensure download completes
+        time.sleep(5)
         
         # Check if the file was successfully downloaded
         if os.path.exists(model_path):
             print("Model downloaded successfully!")
         else:
             raise Exception(f"Failed to download the model. Please check the file ID or URL.")
-            
 
-
-
+# Function to load the model
 def load_model(model_path, num_classes=91, device='cpu'):
     # Download the model from cloud if not available locally
     download_model(model_path)
