@@ -64,19 +64,19 @@ def download_model(model_path, url):
         else:
             raise Exception(f"Failed to download the model. HTTP Status: {response.status_code}")
 
-# Use the Dropbox link for downloading
-download_model(model_path, dropbox_link)
 
 def load_model(model_path, num_classes=91, device='cpu'):
-    # Ensure model is downloaded before loading
-    download_model(model_path, dropbox_link)
+    download_model(model_path, dropbox_link)  # Ensure model is downloaded before loading
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+
+    # Use weights_only=True to minimize memory usage
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.to(device)
     model.eval()
     return model
+
 
 model = load_model(model_path, num_classes=91, device=device)
 
