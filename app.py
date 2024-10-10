@@ -67,14 +67,17 @@ def download_model(model_path, url):
 
 def load_model(model_path, num_classes=91, device='cpu'):
     download_model(model_path, dropbox_link)  # Ensure model is downloaded before loading
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    
+    with torch.no_grad():
+        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
-    # Use weights_only=True to minimize memory usage
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-    model.to(device)
-    model.eval()
+        # Using weights_only to avoid loading the entire model if unnecessary
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        model.to(device)
+        model.eval()
+
     return model
 
 
