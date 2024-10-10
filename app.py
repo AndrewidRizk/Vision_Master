@@ -48,13 +48,17 @@ drive_file_id = '1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU'  # Google Drive file ID
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 # Function to download the model if not present locally
-def download_model_with_curl(model_path):
+def download_model(model_path):
     if not os.path.exists(model_path):
-        print(f"Model not found locally. Downloading using curl...")
+        print(f"Model not found locally. Downloading from Google Drive...")
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
+
+        # Change the URL to use the export format that `gdown` prefers
+        url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
+        gdown.download(url, model_path, quiet=False, fuzzy=True)
         
-        # Using curl to download the file
-        subprocess.run(["curl", "-L", "-o", model_path, f"https://drive.google.com/uc?export=download&id=1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU"])
+        # Optional: Wait for a short time to ensure download completes
+        time.sleep(5)
         
         # Check if the file was successfully downloaded
         if os.path.exists(model_path):
@@ -66,7 +70,7 @@ def download_model_with_curl(model_path):
 # Function to load the model
 def load_model(model_path, num_classes=91, device='cpu'):
     # Download the model from cloud if not available locally
-    download_model_with_curl(model_path)
+    download_model(model_path)
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
