@@ -53,8 +53,10 @@ def download_model(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
         # Use gdown to download the file from Google Drive using file ID
-        gdown.download("https://drive.google.com/file/d/1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU/view?usp=sharing", "faster_rcnn_coco_trained.pth", quiet=False)
-        time.sleep(5)
+        gdown.download("https://drive.google.com/uc?id=1VKHNgbU8VduTUKXLeSGZC-r0t-dBiYdU", model_path, quiet=False)
+        
+        time.sleep(5)  # Optional: Wait for a short time to ensure download completes
+        
         # Check if the file was successfully downloaded
         if os.path.exists(model_path):
             print("Model downloaded successfully!")
