@@ -1,22 +1,29 @@
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session
-from flask_cors import CORS  # Import flask-cors for cross-origin support
+from flask_cors import CORS
 import os
 import torch
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import matplotlib
-matplotlib.use('Agg')  # Use a non-GUI backend for rendering
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+import logging
 from PIL import Image
 import io
-import torchvision.transforms as T
+import requests
+import gdown
 from werkzeug.utils import secure_filename
 import glob
 import time
-import requests
-import gdown  # Make sure to install gdown: pip install gdown
-import subprocess
+import gc  # Import garbage collector
+import torch.cuda  # To manage CUDA memory, if using GPU
+
+# Use a non-GUI backend for rendering plots
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import torchvision.transforms as T
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 # Flask App Setup
 app = Flask(__name__)
@@ -42,58 +49,68 @@ COCO_INSTANCE_CATEGORY_NAMES = [
     'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
 
-# Load the trained model
+# Model configuration
+# Model configuration
 model_path = 'saved_model/faster_rcnn_coco_trained.pth'
-dropbox_link = 'https://www.dropbox.com/scl/fi/2s288wff0wg8q94bxgxow/faster_rcnn_coco_trained.pth?rlkey=r5qbth7v6gce6qs7e5f3xoaol&st=0qngbf8o&dl=1'  # Updated Dropbox direct download link
+dropbox_link = 'https://www.dropbox.com/scl/fi/2s288wff0wg8q94bxgxow/faster_rcnn_coco_trained.pth?rlkey=r5qbth7v6gce6qs7e5f3xoaol&st=0qngbf8o&dl=1'
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 # Function to download the model if not present locally
 def download_model(model_path, url):
     if not os.path.exists(model_path):
-        print(f"Model not found locally. Downloading from Dropbox...")
+        logging.info(f"Model not found locally. Downloading from Dropbox...")
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        
-        # Use requests to download the file from Dropbox
-        response = requests.get(url, stream=True)
-        if response.status_code == 200:
+
+        # Download using requests
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
             with open(model_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-            print("Model downloaded successfully!")
-        else:
-            raise Exception(f"Failed to download the model. HTTP Status: {response.status_code}")
+                    f.write(chunk)
+            logging.info("Model downloaded successfully!")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to download the model. Error: {e}")
+            raise
 
-
+# Load model
 def load_model(model_path, num_classes=91, device='cpu'):
-    download_model(model_path, dropbox_link)  # Ensure model is downloaded before loading
+    download_model(model_path, dropbox_link)
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.to(device)
+    model.eval()
     
-    with torch.no_grad():
-        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
-        in_features = model.roi_heads.box_predictor.cls_score.in_features
-        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
-        # Using weights_only to avoid loading the entire model if unnecessary
-        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-        model.to(device)
-        model.eval()
-
+    # Free any unnecessary memory allocations
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     return model
 
 
 model = load_model(model_path, num_classes=91, device=device)
 
 def detect_and_draw_boxes(image, model, device, threshold=0.5):
+    # Transform the image to tensor and move it to the specified device
     transform = T.Compose([T.ToTensor()])
     image_tensor = transform(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
+        # Perform inference
         outputs = model(image_tensor)
 
+    # Release memory used by image tensor as soon as possible
+    del image_tensor
+    torch.cuda.empty_cache()
+
+    # If no outputs are found, return the original image
     if len(outputs) == 0 or len(outputs[0]['boxes']) == 0:
         return convert_image_to_buffer(image), {}, 0
 
-    # Extract boxes, labels, and scores
+    # Extract boxes, labels, and scores and move them to CPU for further processing
     boxes = outputs[0]['boxes'].cpu().numpy()
     labels = outputs[0]['labels'].cpu().numpy()
     scores = outputs[0]['scores'].cpu().numpy()
@@ -108,12 +125,15 @@ def detect_and_draw_boxes(image, model, device, threshold=0.5):
     if len(boxes) == 0:
         return convert_image_to_buffer(image), {}, 0
 
+    # Clear unused tensors from GPU
+    del outputs
+    torch.cuda.empty_cache()
+
     # Store detected elements in a dictionary
     detected_elements = {}
     instance_count = 0
 
     for label, score in zip(labels, scores):
-        # Ensure that label indices are within bounds
         if label < len(COCO_INSTANCE_CATEGORY_NAMES):
             label_name = COCO_INSTANCE_CATEGORY_NAMES[label]
         else:
@@ -149,10 +169,15 @@ def detect_and_draw_boxes(image, model, device, threshold=0.5):
     plt.savefig(buf, format='jpg')
     buf.seek(0)
     plt.close()
+
+    # Clear memory allocated for matplotlib figure
+    plt.clf()
+    plt.close('all')
+
+    # Force garbage collection to release memory used by intermediate variables
+    gc.collect()
+
     return buf, detected_elements, instance_count  # Return the buffer and detection info
-
-
-
 
 # Helper function to convert PIL image to an in-memory buffer
 def convert_image_to_buffer(image):
