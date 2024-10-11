@@ -1,3 +1,8 @@
 coco_env/
 saved_model/faster_rcnn_coco_trained.pth
 new_env/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
