@@ -73,21 +73,27 @@ def download_model(model_path, url):
             logging.error(f"Failed to download the model. Error: {e}")
             raise
 
-# Load model
+# Disable automatic weight downloading from torchvision and force load from custom path
 def load_model(model_path, num_classes=91, device='cpu'):
-    download_model(model_path, dropbox_link)
+    download_model(model_path, dropbox_link)  # Ensure model is downloaded before loading
+
+    # Define the model architecture without initializing weights
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+    
+    # Set up a custom classifier head with the appropriate number of classes
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+    # Load your custom weights from the specified path
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    
     model.to(device)
     model.eval()
-    
-    # Free any unnecessary memory allocations
+
+        # Free any unnecessary memory allocations
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
     return model
 
 
