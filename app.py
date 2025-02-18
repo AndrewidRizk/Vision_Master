@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session
 from flask_cors import CORS
 import os
 import torch
@@ -197,38 +197,40 @@ def convert_image_to_buffer(image):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     slideshow_folder = os.path.join(app.static_folder, 'slideshow')
-    slideshow_images = [img for img in os.listdir(slideshow_folder) 
-                        if img.lower().endswith(('png', 'jpg', 'jpeg', 'gif'))]
+    slideshow_images = [img for img in os.listdir(slideshow_folder) if img.lower().endswith(('png', 'jpg', 'jpeg', 'gif'))]
     if request.method == 'POST':
+        
         if 'file' not in request.files:
-            return jsonify({'error': 'No file part in the request.'}), 400
+            return render_template('error.html', message="No file part in the request.")
         
         file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'No file selected for uploading.'}), 400
+            return render_template('error.html', message="No file selected for uploading.")
         
         if file:
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            
-            # Make sure to open the image before processing
+
+            # Open the image and process it
             image = Image.open(filepath).convert("RGB")
             
+            # Correctly unpack three values
             processed_image, detected_elements, total_instances = detect_and_draw_boxes(image, model, device)
-            
+
+            # Save the processed image or the original if no detection
             output_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"output_{filename}")
             with open(output_image_path, 'wb') as f:
                 f.write(processed_image.getbuffer())
-            
+
+            # Store the detection info in session
             session['total_elements'] = total_instances
             session['detected_elements'] = detected_elements
-            
-            redirect_url = url_for('view_image', filename=f'output_{filename}')
-            # Always return JSON with the redirect URL when handling AJAX
-            return jsonify({'redirect': redirect_url})
-    
-    return render_template('index.html', slideshow_images=slideshow_images)
+
+            # Redirect to view image
+            return redirect(url_for('view_image', filename=f'output_{filename}'))
+
+    return render_template('index.html', slideshow_images = slideshow_images)
 
 
 @app.route('/uploads/<filename>')
